@@ -3,8 +3,10 @@ import {
   createTableInFirebase,
   updateTableInFirebase,
   deleteTableFromFirebase,
+  db,
+  writeData,
 } from "./firebase"
-import { collection, getDocs, getFirestore } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, getFirestore, serverTimestamp, updateDoc } from "firebase/firestore";
 import { app } from "./firebase"; 
 
 interface Table {
@@ -72,6 +74,30 @@ export async function deleteTable(id: string): Promise<void> {
     await deleteTableFromFirebase(id)
   } catch (error) {
     console.error("Error deleting table:", error)
+    throw error
+  }
+}
+export async function updateTablesStatusInFirebase(id: string, status: string) {
+  try {
+    await updateDoc(doc(db, "tables", id), {
+      status,
+      updatedAt: serverTimestamp(),
+    })
+
+    const tableDoc = await getDoc(doc(db, "tables", id))
+    const tableData = tableDoc.data()
+    await writeData(id,'tables',tableData)
+
+
+    return {
+      id,
+      ...tableData,
+      status,
+      createdAt: tableData?.createdAt.toDate().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+  } catch (error) {
+    console.error("Error updating table status:", error)
     throw error
   }
 }
