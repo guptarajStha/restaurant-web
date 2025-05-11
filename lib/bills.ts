@@ -32,6 +32,7 @@ interface Bill {
   customerName: string
   customerPhone: string
   subtotal: number
+  discountType: "percentage" | "flat"
   discountPercent: number
   discountAmount: number
   // tax: number
@@ -98,9 +99,13 @@ export async function updateBillStatus(
   }
 }
 
-export async function applyDiscount(id: string, discountPercent: number): Promise<Bill> {
+export async function applyDiscount(
+  id: string,
+  discountType: "percentage" | "flat",
+  discountValue: number,
+): Promise<Bill> {
   try {
-    return await applyDiscountToFirebaseBill(id, discountPercent)
+    return await applyDiscountToFirebaseBill(id, discountType, discountValue)
   } catch (error) {
     console.error("Error applying discount to bill:", error)
     throw error

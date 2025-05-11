@@ -8,7 +8,7 @@ import Link from "next/link"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { format } from "date-fns"
 import { getFinancialSummary, getMonthlyFinancialData } from "@/lib/financial"
-import { subscribeToRecentOrders } from "@/lib/firebase"
+import { subscribeToRecentOrders,getTablesFromRealtime } from "@/lib/firebase"
 import { getTableCount } from "@/lib/tables"
 import { getDocumentCount } from "@/lib/global"
 
@@ -81,6 +81,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchItemTypeCount = async () => {
       try {
+        await getTablesFromRealtime();
         const count = await getDocumentCount("itemTypes"); // Use dynamic collection name
         setItemTypeCount(count);
       } catch (error) {

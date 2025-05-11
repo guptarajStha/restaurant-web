@@ -18,6 +18,8 @@ import {
 } from "firebase/firestore"
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth"
+import { updateTablesStatusInFirebase } from "./tables";
+import { get, getDatabase, ref, set, update } from "firebase/database";
 
 
 // Your Firebase configuration
@@ -25,6 +27,7 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, si
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
@@ -119,6 +122,7 @@ export async function createTableInFirebase(tableData: any) {
       ...tableData,
       createdAt: serverTimestamp(),
     })
+    await writeData(tableRef.id,'tables',tableData)
 
     return {
       id: tableRef.id,
@@ -133,6 +137,7 @@ export async function createTableInFirebase(tableData: any) {
 export async function updateTableInFirebase(id: string, tableData: any) {
   try {
     await updateDoc(doc(db, "tables", id), tableData)
+    await writeData(id,'tables',tableData)
 
     return {
       id,
@@ -348,6 +353,10 @@ export async function createOrderInFirebase(orderData: any) {
 
     await setDoc(orderRef, newOrder)
 
+    await updateTablesStatusInFirebase(orderData.tableId, "occupied")
+    await writeData(orderRef.id,'orders',newOrder)
+
+
     return {
       id: orderRef.id,
       ...newOrder,
@@ -360,6 +369,7 @@ export async function createOrderInFirebase(orderData: any) {
   }
 }
 
+
 export async function updateOrderStatusInFirebase(id: string, status: string) {
   try {
     await updateDoc(doc(db, "orders", id), {
@@ -369,6 +379,7 @@ export async function updateOrderStatusInFirebase(id: string, status: string) {
 
     const orderDoc = await getDoc(doc(db, "orders", id))
     const orderData = orderDoc.data()
+    await writeData(id,'orders',orderData)
 
     return {
       id,
@@ -440,6 +451,13 @@ export async function createBillInFirebase(billData: any) {
     }
 
     await setDoc(billRef, newBill)
+    await writeData(billRef.id,'bills',newBill)
+    for (const order of newBill.orders) {
+      if (order.tableId) {
+        // Update the table's status to "occupied"
+        await updateTablesStatusInFirebase(order.tableId, "available");
+      }
+    }
 
     return {
       id: billRef.id,
@@ -469,6 +487,9 @@ export async function updateBillStatusInFirebase(id: string, status: string, pay
     const billDoc = await getDoc(doc(db, "bills", id))
     const billData = billDoc.data()
 
+    await writeData(id,'bills',billData)
+
+
     return {
       id,
       ...billData,
@@ -483,42 +504,44 @@ export async function updateBillStatusInFirebase(id: string, status: string, pay
   }
 }
 
-export async function applyDiscountToFirebaseBill(id: string, discountPercent: number) {
+export async function applyDiscountToFirebaseBill(id: string, discountType: string, discountValue: number) {
   try {
-    const billDoc = await getDoc(doc(db, "bills", id))
+    const billDocRef = doc(db, "bills", id)
+    const billDoc = await getDoc(billDocRef)
+
     if (!billDoc.exists()) {
-      throw new Error(`Bill with id ${id} not found`)
+      throw new Error("Bill not found")
     }
 
     const billData = billDoc.data()
 
-    // Calculate discount amount
-    const discountAmount = (billData.subtotal * discountPercent) / 100
+    let discountAmount = 0
 
-    // Recalculate total
-    const discountedSubtotal = billData.subtotal - discountAmount
-    const tax = discountedSubtotal * 0.09 // 9% tax
-    const total = discountedSubtotal + tax
-
-    await updateDoc(doc(db, "bills", id), {
-      discountPercent,
-      discountAmount,
-      tax,
-      total,
-      updatedAt: serverTimestamp(),
-    })
-
-    return {
-      id,
-      ...billData,
-      discountPercent,
-      discountAmount,
-      tax,
-      total,
-      createdAt: billData.createdAt.toDate().toISOString(),
-      updatedAt: new Date().toISOString(),
+    if (discountType === "percentage") {
+      discountAmount = (billData.subtotal * discountValue) / 100
+    } else if (discountType === "flat") {
+      discountAmount = discountValue
     }
-  } catch (error) {
+
+    const updatedTotal = billData.subtotal - discountAmount
+    const updatedBillData = {
+      discountType: discountType,
+      discountPercent: discountType === "percentage" ? discountValue : 0,
+      discountAmount: discountAmount,
+      total: updatedTotal,
+      updatedAt: serverTimestamp(),
+    }
+
+    await updateDoc(billDocRef, updatedBillData)
+
+    const updatedBillDoc = await getDoc(billDocRef)
+    return {
+      id: updatedBillDoc.id,
+      ...updatedBillDoc.data(),
+      createdAt: updatedBillDoc.data().createdAt?.toDate().toISOString() || new Date().toISOString(),
+      updatedAt: updatedBillDoc.data().updatedAt?.toDate().toISOString() || new Date().toISOString(),
+    }
+  } catch (error: any) {
     console.error("Error applying discount to bill:", error)
     throw error
   }
@@ -668,5 +691,58 @@ export function subscribeToTableStatus(callback: (tables: any[]) => void) {
   })
 }
 
+export async function writeData(id: string, path: string, data: any) {
+  const db = getDatabase();
+  
+  // Store data under the user's ID with the provided path
+  set(ref(db, path + '/' + id), {
+    ...data,
+    timestamp: Date.now(), // optional: you can add a timestamp to track when the data was written
+  }).then(() => {
+    console.log(path+" data written successfully");
+  }).catch((error) => {
+    console.error("Error writing user data: ", error);
+  });
+}
+
+// function updateData(id: string, path: string, data: any) {
+//   const db = getDatabase();
+  
+//   const dataRef = ref(db, path + '/' + id);
+  
+//   update(dataRef, {
+//     ...data,  // Only update the fields in `data`
+//   }).then(() => {
+//     console.log(path + " data updated successfully");
+//   }).catch((error) => {
+//     console.error("Error updating user data: ", error);
+//   });
+// }
 // Export the Firebase instances
+export async function getTablesFromRealtime() {
+  const db = getDatabase(); // Get the Firebase Realtime Database instance
+
+  // Reference to the 'orders/' node
+  let messagesRef = ref(db, 'orders/');
+
+  try {
+    // Get the data from the reference path
+    const snapshot = await get(messagesRef);
+
+    // Check if the data exists at the specified path
+    if (snapshot.exists()) {
+      // If data exists, log the result and return it
+      console.log("Data retrieved Live:", snapshot.val());
+      return snapshot.val();  // Return the data as an object
+    } else {
+      // If no data exists at the path, log this
+      console.log("No data available");
+      return null;  // Return null if no data found
+    }
+  } catch (error) {
+    // Catch and log any errors
+    console.error("Error reading data: ", error);
+    throw error;  // Rethrow the error for the calling function to handle
+  }
+}
 export { db, auth }

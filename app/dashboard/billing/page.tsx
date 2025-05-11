@@ -20,6 +20,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { getBills, createBill, updateBillStatus, applyDiscount, mergeBills } from "@/lib/bills"
 import { getOrders } from "@/lib/orders"
 
@@ -49,6 +50,7 @@ interface Bill {
   customerName: string
   customerPhone: string
   subtotal: number
+  discountType: "percentage" | "flat"
   discountPercent: number
   discountAmount: number
   tax: number
@@ -82,7 +84,8 @@ export default function BillingPage() {
 
   // Discount dialog
   const [discountDialogOpen, setDiscountDialogOpen] = useState(false)
-  const [discountPercent, setDiscountPercent] = useState(0)
+  const [discountType, setDiscountType] = useState<"percentage" | "flat">("percentage")
+  const [discountValue, setDiscountValue] = useState(0)
   const [discountBillId, setDiscountBillId] = useState("")
 
   useEffect(() => {
@@ -168,10 +171,10 @@ export default function BillingPage() {
   }
 
   const handleApplyDiscount = async () => {
-    if (!discountBillId || discountPercent <= 0) return
+    if (!discountBillId || discountValue <= 0) return
 
     try {
-      const updatedBill = await applyDiscount(discountBillId, discountPercent)
+      const updatedBill = await applyDiscount(discountBillId, discountType, discountValue)
 
       setBills(bills.map((bill) => (bill.id === discountBillId ? updatedBill : bill)))
 
@@ -180,7 +183,7 @@ export default function BillingPage() {
       }
 
       setDiscountDialogOpen(false)
-      setDiscountPercent(0)
+      setDiscountValue(0)
       setDiscountBillId("")
     } catch (error) {
       console.error("Failed to apply discount:", error)
@@ -194,6 +197,8 @@ export default function BillingPage() {
 
   const openDiscountDialog = (billId: string) => {
     setDiscountBillId(billId)
+    setDiscountType("percentage")
+    setDiscountValue(0)
     setDiscountDialogOpen(true)
   }
 
@@ -293,9 +298,13 @@ export default function BillingPage() {
           <div class="summary">
             <p><strong>Subtotal:</strong> $${bill.subtotal.toFixed(2)}</p>
             ${
-              bill.discountPercent > 0
+              bill.discountAmount > 0
                 ? `
-              <p><strong>Discount (${bill.discountPercent}%):</strong> -$${bill.discountAmount.toFixed(2)}</p>
+              <p><strong>Discount ${
+                bill.discountType === "percentage"
+                  ? `(${bill.discountPercent}%)`
+                  : `(Flat $${bill.discountAmount.toFixed(2)})`
+              }:</strong> -$${bill.discountAmount.toFixed(2)}</p>
             `
                 : ""
             }
@@ -550,9 +559,12 @@ export default function BillingPage() {
                     <TableCell>{bill.orders.length}</TableCell>
                     <TableCell>${bill.subtotal.toFixed(2)}</TableCell>
                     <TableCell>
-                      {bill.discountPercent > 0 ? (
+                      {bill.discountAmount > 0 ? (
                         <span className="text-green-600">
-                          {bill.discountPercent}% (${bill.discountAmount.toFixed(2)})
+                          {bill.discountType === "percentage"
+                            ? `${bill.discountPercent}%`
+                            : `$${bill.discountAmount.toFixed(2)}`}{" "}
+                          (${bill.discountAmount.toFixed(2)})
                         </span>
                       ) : (
                         <span className="text-muted-foreground">None</span>
@@ -654,13 +666,21 @@ export default function BillingPage() {
                       <span>${selectedBill.subtotal.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Discount ({selectedBill.discountPercent}%):</span>
+                      <span>
+                        Discount{" "}
+                        {selectedBill.discountAmount > 0
+                          ? selectedBill.discountType === "percentage"
+                            ? `(${selectedBill.discountPercent}%)`
+                            : "(Flat)"
+                          : ""}
+                        :
+                      </span>
                       <span>-${selectedBill.discountAmount.toFixed(2)}</span>
                     </div>
-                    {/* <div className="flex justify-between">
+                    <div className="flex justify-between">
                       <span>Tax:</span>
                       <span>${selectedBill.tax.toFixed(2)}</span>
-                    </div> */}
+                    </div>
                     <div className="flex justify-between font-bold text-lg">
                       <span>Total:</span>
                       <span>${selectedBill.total.toFixed(2)}</span>
@@ -752,18 +772,36 @@ export default function BillingPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Apply Discount</DialogTitle>
-            <DialogDescription>Enter the discount percentage to apply to this bill.</DialogDescription>
+            <DialogDescription>Select discount type and enter the value.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="discountPercent">Discount Percentage (%)</Label>
+              <Label>Discount Type</Label>
+              <RadioGroup
+                value={discountType}
+                onValueChange={(value) => setDiscountType(value as "percentage" | "flat")}
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="percentage" id="percentage" />
+                  <Label htmlFor="percentage">Percentage (%)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="flat" id="flat" />
+                  <Label htmlFor="flat">Flat Amount ($)</Label>
+                </div>
+              </RadioGroup>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="discountValue">
+                {discountType === "percentage" ? "Discount Percentage (%)" : "Discount Amount ($)"}
+              </Label>
               <Input
-                id="discountPercent"
+                id="discountValue"
                 type="number"
                 min="0"
-                max="100"
-                value={discountPercent}
-                onChange={(e) => setDiscountPercent(Number(e.target.value))}
+                max={discountType === "percentage" ? "100" : undefined}
+                value={discountValue}
+                onChange={(e) => setDiscountValue(Number(e.target.value))}
               />
             </div>
           </div>
@@ -771,7 +809,10 @@ export default function BillingPage() {
             <DialogClose asChild>
               <Button variant="outline">Cancel</Button>
             </DialogClose>
-            <Button onClick={handleApplyDiscount} disabled={discountPercent <= 0 || discountPercent > 100}>
+            <Button
+              onClick={handleApplyDiscount}
+              disabled={discountValue <= 0 || (discountType === "percentage" && discountValue > 100)}
+            >
               Apply Discount
             </Button>
           </DialogFooter>
