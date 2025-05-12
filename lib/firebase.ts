@@ -16,11 +16,10 @@ import {
   Timestamp,
   serverTimestamp,
 } from "firebase/firestore"
-import { getAnalytics } from "firebase/analytics";
+import { getAnalytics,isSupported } from "firebase/analytics";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth"
 import { updateTablesStatusInFirebase } from "./tables";
 import { get, getDatabase, ref, set, update } from "firebase/database";
-
 
 // Your Firebase configuration
 // Replace these with your actual Firebase project credentials
@@ -39,8 +38,18 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig)
 const db = getFirestore(app)
 const auth = getAuth(app)
-const analytics = getAnalytics(app);
+// const analytics = getAnalytics(app);
 // ===== Authentication Functions =====
+
+let analytics: ReturnType<typeof getAnalytics> | null = null
+
+if (typeof window !== "undefined") {
+  isSupported().then((supported) => {
+    if (supported) {
+      analytics = getAnalytics(app)
+    }
+  })
+}
 
 export async function registerUserWithFirebase(name: string, email: string, password: string) {
   try {
@@ -745,4 +754,4 @@ export async function getTablesFromRealtime() {
     throw error;  // Rethrow the error for the calling function to handle
   }
 }
-export { db, auth }
+export { db, auth, analytics  }
