@@ -356,6 +356,7 @@ export async function createOrderInFirebase(orderData: any) {
       status: "pending",
       items: validOrderItems,
       total,
+      waiterName: orderData.waiterName,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }
@@ -708,9 +709,9 @@ export async function writeData(id: string, path: string, data: any) {
     ...data,
     timestamp: Date.now(), // optional: you can add a timestamp to track when the data was written
   }).then(() => {
-    console.log(path+" data written successfully");
+    // console.log(path+" data written successfully");
   }).catch((error) => {
-    console.error("Error writing user data: ", error);
+    // console.error("Error writing user data: ", error);
   });
 }
 
@@ -741,7 +742,7 @@ export async function getTablesFromRealtime() {
     // Check if the data exists at the specified path
     if (snapshot.exists()) {
       // If data exists, log the result and return it
-      console.log("Data retrieved Live:", snapshot.val());
+      // console.log("Data retrieved Live:", snapshot.val());
       return snapshot.val();  // Return the data as an object
     } else {
       // If no data exists at the path, log this

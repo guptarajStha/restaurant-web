@@ -10,26 +10,46 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { loginUser } from "@/lib/auth"
-
+import { PinVerificationDialog } from "@/components/pin-verification-dialog"
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+   const [showPinDialog, setShowPinDialog] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    // setLoading(true)
     setError("")
+    
+    // Show PIN verification dialog
+    setShowPinDialog(true)
+  }
+
+  const verifyPin = async (pin: string): Promise<boolean> => {
+    // Check if PIN matches the environment variable
+    if (pin === process.env.NEXT_PUBLIC_LOGIN_PIN) {
+      // PIN is correct, proceed with login
+      await loginUserWithPin()
+      return true
+    }
+    return false
+  }
+
+  const loginUserWithPin = async () => {
+    setLoading(true)
+
 
     try {
       await loginUser(email, password)
       router.push("/dashboard")
     } catch (err:any) {
-      setError("Invalid email or password"+err.message)
+      setError("Invalid email or password")
     } finally {
       setLoading(false)
+       setShowPinDialog(false)
     }
   }
 
@@ -71,6 +91,13 @@ export default function LoginPage() {
           </CardFooter>
         </form>
       </Card>
+         <PinVerificationDialog
+        isOpen={showPinDialog}
+        onClose={() => setShowPinDialog(false)}
+        onVerify={verifyPin}
+        title="PIN Verification"
+        description="Please enter the login PIN to access the system."
+      />
     </div>
   )
 }

@@ -605,7 +605,7 @@ export default function BillingPage() {
 
       {/* Bill Details Dialog */}
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl overflow-y-scroll h-[90vh] ">
           {selectedBill && (
             <>
               <DialogHeader>

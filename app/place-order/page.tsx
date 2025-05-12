@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Trash, ShoppingCart } from "lucide-react"
 import { getTablesFromFirebase, getItemsFromFirebase, createOrderInFirebase } from "@/lib/firebase"
 import { useRouter } from "next/navigation"
+import { PinVerificationDialog } from "@/components/pin-verification-dialog"
 
 interface TableType {
   id: string
@@ -43,14 +44,13 @@ export default function OrderFormPage() {
   const [success, setSuccess] = useState(false)
 
   // Form state
-  const [customerName, setCustomerName] = useState("")
-  const [customerPhone, setCustomerPhone] = useState("")
-  const [customerEmail, setCustomerEmail] = useState("")
-  const [specialInstructions, setSpecialInstructions] = useState("")
+  const [waiterName, setWaiterName] = useState("")
   const [selectedTable, setSelectedTable] = useState("")
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
   const [currentItemId, setCurrentItemId] = useState("")
   const [currentQuantity, setCurrentQuantity] = useState(1)
+  const [showPinDialog, setShowPinDialog] = useState(false)
+
 
   useEffect(() => {
     const fetchData = async () => {
@@ -58,7 +58,8 @@ export default function OrderFormPage() {
         const [tablesData, itemsData] = await Promise.all([getTablesFromFirebase(), getItemsFromFirebase()])
 
         // Filter only available tables
-        const availableTables = tablesData.filter((table) => table.status === "available")
+        // const availableTables = tablesData.filter((table) => table.status === "available")
+        const availableTables = tablesData
 
         setTables(availableTables)
         setItems(itemsData)
@@ -118,7 +119,21 @@ export default function OrderFormPage() {
     if (!selectedTable || orderItems.length === 0) {
       return
     }
+    // Show PIN verification dialog
+    setShowPinDialog(true)
+  }
 
+  const verifyPin = async (pin: string): Promise<boolean> => {
+    // Check if PIN matches the environment variable
+    if (pin === process.env.NEXT_PUBLIC_ORDER_PIN) {
+      // PIN is correct, proceed with order submission
+      await submitOrder()
+      return true
+    }
+    return false
+  }
+
+  const submitOrder = async () => {
     setSubmitting(true)
 
     try {
@@ -126,20 +141,14 @@ export default function OrderFormPage() {
       await createOrderInFirebase({
         tableId: selectedTable,
         items: orderItems,
-        customerName,
-        customerPhone,
-        customerEmail,
-        specialInstructions,
+        waiterName,
       })
 
       // Show success message
       setSuccess(true)
 
       // Reset form
-      setCustomerName("")
-      setCustomerPhone("")
-      setCustomerEmail("")
-      setSpecialInstructions("")
+      setWaiterName("")
       setSelectedTable("")
       setOrderItems([])
 
@@ -151,6 +160,7 @@ export default function OrderFormPage() {
       console.error("Failed to submit order:", error)
     } finally {
       setSubmitting(false)
+      setShowPinDialog(false)
     }
   }
 
@@ -193,41 +203,8 @@ export default function OrderFormPage() {
           <CardDescription>Fill in the details below to place your order</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmitOrder}>
+         
           <CardContent className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="customerName">Your Name</Label>
-                <Input
-                  id="customerName"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Enter your name"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="customerPhone">Phone Number</Label>
-                <Input
-                  id="customerPhone"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="Enter your phone number"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="customerEmail">Email (Optional)</Label>
-              <Input
-                id="customerEmail"
-                type="email"
-                value={customerEmail}
-                onChange={(e) => setCustomerEmail(e.target.value)}
-                placeholder="Enter your email"
-              />
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="table">Select Table</Label>
               <Select value={selectedTable} onValueChange={setSelectedTable} required>
@@ -330,17 +307,17 @@ export default function OrderFormPage() {
                 </div>
               )}
             </div>
+             <div className="space-y-2">
+            <Label htmlFor="orderBy">Waiter Name</Label>
+            <Input
+              id="orderBy"
+              value={waiterName}
+              onChange={(e) => setWaiterName(e.target.value)}
+              placeholder="Enter waiter name"
+              required
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="specialInstructions">Special Instructions (Optional)</Label>
-              <Textarea
-                id="specialInstructions"
-                value={specialInstructions}
-                onChange={(e) => setSpecialInstructions(e.target.value)}
-                placeholder="Any special requests or dietary requirements?"
-                rows={3}
-              />
-            </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={submitting || orderItems.length === 0 || !selectedTable}>
@@ -358,6 +335,14 @@ export default function OrderFormPage() {
           </CardFooter>
         </form>
       </Card>
+
+      <PinVerificationDialog
+        isOpen={showPinDialog}
+        onClose={() => setShowPinDialog(false)}
+        onVerify={verifyPin}
+        title="PIN Verification"
+        description="Please enter the 6-digit PIN to place your order."
+      />
     </div>
   )
 }
