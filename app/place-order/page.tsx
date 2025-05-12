@@ -254,7 +254,7 @@ export default function OrderFormPage() {
                     type="number"
                     min="1"
                     value={currentQuantity}
-                    onChange={(e) => setCurrentQuantity(Number.parseInt(e.target.value) || 1)}
+                    onChange={(e) => setCurrentQuantity(Number.parseInt(e.target.value) || 0)}
                   />
                 </div>
                 <Button type="button" onClick={addItemToOrder} className="mb-0.5">
