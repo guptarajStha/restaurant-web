@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { registerUser } from "@/lib/auth"
-
+import { PinVerificationDialog } from "@/components/pin-verification-dialog"
 export default function RegisterPage() {
   const router = useRouter()
   const [name, setName] = useState("")
@@ -19,17 +19,35 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [showPinDialog, setShowPinDialog] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    // setLoading(true)
     setError("")
 
     if (password !== confirmPassword) {
       setError("Passwords do not match")
-      setLoading(false)
+      // setLoading(false)
       return
     }
+    
+    // Show PIN verification dialog
+    setShowPinDialog(true)
+  }
+
+  const verifyPin = async (pin: string): Promise<boolean> => {
+    // Check if PIN matches the environment variable
+    if (pin === process.env.NEXT_PUBLIC_REGISTER_PIN) {
+      // PIN is correct, proceed with registration
+      await registerUserWithPin()
+      return true
+    }
+    return false
+  }
+
+  const registerUserWithPin = async () => {
+    setLoading(true)
 
     try {
       await registerUser(name, email, password)
@@ -38,6 +56,7 @@ export default function RegisterPage() {
       setError("Registration failed. Please try again.")
     } finally {
       setLoading(false)
+      setShowPinDialog(false)
     }
   }
 
@@ -93,6 +112,13 @@ export default function RegisterPage() {
           </CardFooter>
         </form>
       </Card>
+       <PinVerificationDialog
+        isOpen={showPinDialog}
+        onClose={() => setShowPinDialog(false)}
+        onVerify={verifyPin}
+        title="PIN Verification"
+        description="Please enter the registration PIN to create an account."
+      />
     </div>
   )
 }
